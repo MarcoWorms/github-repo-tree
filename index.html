@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitHub Repo File Tree</title>
+  <style>
+    .indent {
+      margin-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>GitHub Repo File Tree</h1>
+  <form id="repo-form">
+    <label for="repo-url">GitHub Repo URL:</label>
+    <input type="text" id="repo-url" name="repo-url" required>
+    <button type="submit">Get File Tree</button>
+  </form>
+  <br />
+  <div id="file-tree"></div>
+  <br />
+  <textarea id="output" rows="20" cols="80" readonly></textarea>
+
+  <script>
+document.getElementById('repo-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const repoUrl = document.getElementById('repo-url').value.split('github.com/')[1];
+  const apiUrl = `https://api.github.com/repos/${repoUrl}/contents`;
+  const response = await fetch(apiUrl);
+  const fileTree = await response.json();
+  displayFileTree(fileTree);
+});
+
+async function displayFileTree(fileTree, parentElement = null, indentLevel = 0) {
+  if (!parentElement) {
+    parentElement = document.getElementById('file-tree');
+    parentElement.innerHTML = '';
+  }
+
+  for (const file of fileTree) {
+    const fileElement = document.createElement('div');
+    if (indentLevel > 0) {
+      fileElement.classList.add('indent');
+    }
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = file.name;
+    checkbox.setAttribute('data-url', file.url);
+    checkbox.setAttribute('data-type', file.type);
+
+    const label = document.createElement('label');
+    label.htmlFor = file.name;
+    label.textContent = file.name;
+
+    fileElement.appendChild(checkbox);
+    fileElement.appendChild(label);
+
+    if (file.type === 'dir') {
+        const response = await fetch(file.url);
+        const childFileTree = await response.json();
+        await displayFileTree(childFileTree, fileElement, indentLevel + 1);
+        checkbox.addEventListener('change', () => {
+          const childCheckboxes = fileElement.querySelectorAll('input[type="checkbox"]');
+          for (const childCheckbox of childCheckboxes) {
+            childCheckbox.checked = checkbox.checked;
+          }
+        });
+    }
+
+    parentElement.appendChild(fileElement);
+  }
+
+  if (parentElement === document.getElementById('file-tree')) {
+    const mergeButton = document.createElement('button');
+    mergeButton.style.marginTop = '10px';
+    mergeButton.textContent = 'Merge Checked Files';
+    mergeButton.addEventListener('click', mergeFiles);
+    parentElement.appendChild(mergeButton);
+  }
+}
+
+async function mergeFiles() {
+  const checkboxes = document.querySelectorAll('#file-tree input[type="checkbox"]');
+  const outputTextarea = document.getElementById('output');
+  outputTextarea.value = '';
+
+  for (const checkbox of checkboxes) {
+    if (checkbox.checked && checkbox.getAttribute('data-type') === 'file') {
+      const fileUrl = checkbox.getAttribute('data-url');
+      const response = await fetch(fileUrl);
+      const fileContent = await response.json();
+      const decodedContent = atob(fileContent.content);
+      const fullPath = fileContent.path;
+      outputTextarea.value += `######## ${fullPath}\n\n${decodedContent}\n\n`;
+    }
+  }
+}
+  </script>
+</body>
+</html>
